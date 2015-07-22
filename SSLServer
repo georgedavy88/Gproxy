@@ -1,0 +1,140 @@
+//////////////////////////////////////////////////////////
+// AUTHOR                     : GEORGE DAVY							
+// PROJECT                    : PROXY SERVER						
+// UNIVERSITY 	              : CALIFORNIA STATE UNIVERSITY, EASTBAY 
+////////////////////////////////////////////////////////// 
+
+package org.owasp.crypto;
+ 
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import javax.net.ssl.*;
+
+import java.net.Socket;
+import java.security.KeyStore;
+import java.security.PrivilegedActionException;
+
+public class SSLServer {
+
+	public static void main(String[] args) throws Exception
+	{
+		
+		// Port where the SSL Server needs to listen 
+		int intSSLport = 443;  
+		{
+			//Adding Java Security API
+			java.security.Security.addProvider(new com.sun.net.ssl.internal.ssl.Provider());
+			// For Debugging 
+			System.setProperty("javax.net.debug","all");
+		}
+
+		try {
+				////////////////
+				// SSL Server //
+				//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		    //Registering Key with the Server					
+				KeyStore serverKeys = KeyStore.getInstance("JKS");			
+				serverKeys.load(new FileInputStream("C:/Keys/ServerKeyStore.jks"),"123456".toCharArray());				
+				KeyManagerFactory serverKeyManager = KeyManagerFactory.getInstance("SunX509");
+				serverKeyManager.init(serverKeys, "123456".toCharArray());	
+				
+				//Initializing SSL																					
+				SSLContext ssl = SSLContext.getInstance("TLS");											
+	      ssl.init(serverKeyManager.getKeyManagers(), null, null);				
+	        																								
+	      // Initializing Server with SSL																		
+	      SSLServerSocketFactory sslServerSocketfactory = ssl.getServerSocketFactory();						
+	      SSLServerSocket sslServerSocket = (SSLServerSocket)sslServerSocketfactory.createServerSocket(intSSLport);
+																														
+	      // Infinite loop for listening to client request
+				while(true)
+				{
+				String request;
+				InputStream bis;
+				BufferedReader is;
+				DataOutputStream out;
+				
+				// Server Listening to Clients
+				Socket sslSocket = sslServerSocket.accept();
+				
+				try {
+					bis 						= sslSocket.getInputStream();
+					is 							= new BufferedReader(new InputStreamReader(bis));
+					out 						= new DataOutputStream(sslSocket.getOutputStream());
+					String inputLine;
+					URL myurl;
+					HttpsURLConnection con;
+					HttpURLConnection con1;
+					InputStream ins;
+					//Reading web request from Client
+					request = is.readLine();
+					System.out.println("Browser Request : " + request);
+					int start 					= request.indexOf("GET /") + 5;
+					int end 					= request.indexOf("HTTP/1.1", start);
+					String httpsURL 				= request.substring(start, end - 1);
+					System.out.println("HTTPS Request : " + httpsURL);
+					String protocol = httpsURL.substring (0,5);
+					System.out.println("Protocol : " + protocol);
+					//Connecting to requested URL   
+					
+					// FOR HTTPS URL
+					if(protocol.equals("https"))
+					{
+					myurl = new URL(httpsURL);
+					con = (HttpsURLConnection)myurl.openConnection();
+					ins = con.getInputStream();
+					}
+					
+					// FOR HTTP URL
+					else
+					{
+					myurl = new URL(httpsURL);
+					con1 = (HttpURLConnection)myurl.openConnection();	
+					ins = con1.getInputStream();
+					}
+					
+					InputStreamReader isr = new InputStreamReader(ins);
+					BufferedReader in = new BufferedReader(isr);
+		        
+					/////////////////////////////////////////////////////////////
+					//Reading from Requested URL and Writing to Client Browser //
+					/////////////////////////////////////////////////////////////
+					try
+					{
+						//Reading Data from WEB
+						while ((inputLine = in.readLine()) != null) 
+		            		{ 
+							System.out.println(inputLine);
+							//Writing Data into Client
+		           	 		out.writeBytes(inputLine);
+		           	 		out.flush();
+		            		}
+		            }catch (Exception e) 
+						{
+		   					out.writeBytes("Content-Type: text/html\r\n");
+		   					out.writeBytes("HTTP/1.0 400 " + e.getMessage() + "\r\n"); 
+		   					out.flush();
+		   				} 	finally {out.close();}
+		     
+					//Closing all Input/Output Stream
+					in.close();
+					out.close();
+					sslSocket.close();
+					} catch (IOException e) 
+						{
+						System.out.println("Exception: " + e.getMessage());
+						}
+
+				}
+			}catch(Exception exp)
+				{
+				PrivilegedActionException priexp = new PrivilegedActionException(exp);
+				System.out.println(" Priv exp --- " + priexp.getMessage());
+				System.out.println(" Exception occurred .... " +exp);
+				exp.printStackTrace();
+				}
+	}
+
+}
